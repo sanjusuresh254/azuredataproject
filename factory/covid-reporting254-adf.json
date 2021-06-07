@@ -1,0 +1,9 @@
+{
+	"name": "covid-reporting254-adf",
+	"location": "uaenorth",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "358d7002-55c6-4cd6-9f5f-067c35ab62dc",
+		"tenantId": "562812d6-8f31-4ec8-9702-5dd9894d583e"
+	}
+}
