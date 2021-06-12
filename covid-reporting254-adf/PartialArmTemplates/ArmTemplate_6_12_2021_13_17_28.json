@@ -1,0 +1,200 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "covid-reporting254-adf"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/tr_ingest_hospital_admission_data')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Stopped",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "pl_ingest_ecdc_data",
+							"type": "PipelineReference"
+						}
+					}
+				],
+				"type": "ScheduleTrigger",
+				"typeProperties": {
+					"recurrence": {
+						"frequency": "Day",
+						"interval": 1,
+						"startTime": "2021-06-04T11:44:00",
+						"timeZone": "Arabian Standard Time"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/df_transform_testing')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ds_testing",
+								"type": "DatasetReference"
+							},
+							"name": "SourceTesting"
+						},
+						{
+							"dataset": {
+								"referenceName": "ds_LookupCountryCode",
+								"type": "DatasetReference"
+							},
+							"name": "LookupCountry"
+						},
+						{
+							"dataset": {
+								"referenceName": "ds_Dim_dateLookup",
+								"type": "DatasetReference"
+							},
+							"name": "LookupWeekdate"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ds_sink_testdata",
+								"type": "DatasetReference"
+							},
+							"name": "DataSink"
+						}
+					],
+					"transformations": [
+						{
+							"name": "CountryLookup"
+						},
+						{
+							"name": "SelectRequired"
+						},
+						{
+							"name": "DerivedData"
+						},
+						{
+							"name": "AggregateData"
+						},
+						{
+							"name": "JoinData"
+						},
+						{
+							"name": "SelectReqd"
+						}
+					],
+					"script": "source(output(\n\t\tcountry as string,\n\t\tcountry_code as string,\n\t\tyear_week as string,\n\t\tnew_cases as string,\n\t\ttests_done as string,\n\t\tpopulation as string,\n\t\ttesting_rate as string,\n\t\tpositivity_rate as string,\n\t\ttesting_data_source as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> SourceTesting\nsource(output(\n\t\tcountry as string,\n\t\tcountry_code_2_digit as string,\n\t\tcountry_code_3_digit as string,\n\t\tcontinent as string,\n\t\tpopulation as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> LookupCountry\nsource(output(\n\t\tdate_key as string,\n\t\tdate as string,\n\t\tyear as string,\n\t\tmonth as string,\n\t\tday as string,\n\t\tday_name as string,\n\t\tday_of_year as string,\n\t\tweek_of_month as string,\n\t\tweek_of_year as string,\n\t\tmonth_name as string,\n\t\tyear_month as string,\n\t\tyear_week as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> LookupWeekdate\nSourceTesting, LookupCountry lookup(SourceTesting@country == LookupCountry@country,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> CountryLookup\nCountryLookup select(mapColumn(\n\t\tcountry = LookupCountry@country,\n\t\tcountry_code_2_digit,\n\t\tcountry_code_3_digit,\n\t\tyear_week,\n\t\ttests_done,\n\t\ttesting_rate,\n\t\tnew_cases,\n\t\tpositivity_rate,\n\t\ttesting_data_source,\n\t\tpopulation = LookupCountry@population\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRequired\nLookupWeekdate derive(ecdc_year_week = year + '-W' + lpad(week_of_year,2,'0')) ~> DerivedData\nDerivedData aggregate(groupBy(ecdc_year_week),\n\tweek_start_date = min(date),\n\t\tweek_end_date = max(date)) ~> AggregateData\nSelectRequired, AggregateData join(year_week == ecdc_year_week,\n\tjoinType:'inner',\n\tbroadcast: 'auto')~> JoinData\nJoinData select(mapColumn(\n\t\tcountry,\n\t\tcountry_code_2_digit,\n\t\tcountry_code_3_digit,\n\t\tyear_week,\n\t\ttests_done,\n\t\ttesting_rate,\n\t\tnew_cases,\n\t\tpositivity_rate,\n\t\ttesting_data_source,\n\t\tpopulation,\n\t\tweek_start_date,\n\t\tweek_end_date\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectReqd\nSelectReqd sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tumask: 0022,\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> DataSink"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_testing')]",
+				"[concat(variables('factoryId'), '/datasets/ds_sink_testdata')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_testing')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_covidreportingdl254",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "testing.csv",
+						"folderPath": "ecdc",
+						"fileSystem": "raw254"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "country",
+						"type": "String"
+					},
+					{
+						"name": "country_code",
+						"type": "String"
+					},
+					{
+						"name": "year_week",
+						"type": "String"
+					},
+					{
+						"name": "new_cases",
+						"type": "String"
+					},
+					{
+						"name": "tests_done",
+						"type": "String"
+					},
+					{
+						"name": "population",
+						"type": "String"
+					},
+					{
+						"name": "testing_rate",
+						"type": "String"
+					},
+					{
+						"name": "positivity_rate",
+						"type": "String"
+					},
+					{
+						"name": "testing_data_source",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_sink_testdata')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_covidreportingdl254",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": "ecdc/testing",
+						"fileSystem": "processed"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		}
+	]
+}

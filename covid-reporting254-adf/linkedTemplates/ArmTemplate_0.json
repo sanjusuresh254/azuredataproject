@@ -587,6 +587,100 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/ds_testing')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_covidreportingdl254",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "testing.csv",
+						"folderPath": "ecdc",
+						"fileSystem": "raw254"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "country",
+						"type": "String"
+					},
+					{
+						"name": "country_code",
+						"type": "String"
+					},
+					{
+						"name": "year_week",
+						"type": "String"
+					},
+					{
+						"name": "new_cases",
+						"type": "String"
+					},
+					{
+						"name": "tests_done",
+						"type": "String"
+					},
+					{
+						"name": "population",
+						"type": "String"
+					},
+					{
+						"name": "testing_rate",
+						"type": "String"
+					},
+					{
+						"name": "positivity_rate",
+						"type": "String"
+					},
+					{
+						"name": "testing_data_source",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_covidreportingdl254')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_sink_testdata')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_covidreportingdl254",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": "ecdc/testing",
+						"fileSystem": "processed"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_covidreportingdl254')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/pl_ingest_ecdc_data')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -970,150 +1064,6 @@
 				"[concat(variables('factoryId'), '/datasets/ds_cases')]",
 				"[concat(variables('factoryId'), '/datasets/ds_LookupCountryCode')]",
 				"[concat(variables('factoryId'), '/datasets/ds_ProcessedCases')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/df_transforms_hospital_Admissions')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "ds_raw_hospital_admission",
-								"type": "DatasetReference"
-							},
-							"name": "HospitalAdmissiinsSource"
-						},
-						{
-							"dataset": {
-								"referenceName": "ds_LookupCountryCode",
-								"type": "DatasetReference"
-							},
-							"name": "countrySource"
-						},
-						{
-							"dataset": {
-								"referenceName": "ds_Dim_dateLookup",
-								"type": "DatasetReference"
-							},
-							"name": "DimDataSource"
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "ds_processed_hospital_Admissions_weekly",
-								"type": "DatasetReference"
-							},
-							"name": "weeklySink"
-						},
-						{
-							"dataset": {
-								"referenceName": "ds_processed_hospital_Admissions_daily",
-								"type": "DatasetReference"
-							},
-							"name": "dailySink"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectReqdFields"
-						},
-						{
-							"name": "LookupCountry"
-						},
-						{
-							"name": "SelectRequiredFields"
-						},
-						{
-							"name": "SplitDailyFromweekly"
-						},
-						{
-							"name": "DeriveECDCYearWeek"
-						},
-						{
-							"name": "AggDimDate"
-						},
-						{
-							"name": "JoinWithDate"
-						},
-						{
-							"name": "PivotWeekly"
-						},
-						{
-							"name": "PivotDaily"
-						},
-						{
-							"name": "SortWeekly"
-						},
-						{
-							"name": "SortDaily"
-						},
-						{
-							"name": "SelectWeekly"
-						},
-						{
-							"name": "SelectDaily"
-						}
-					],
-					"script": "source(output(\n\t\tcountry as string,\n\t\tindicator as string,\n\t\tdate as date,\n\t\tyear_week as string,\n\t\tvalue as double,\n\t\tsource as string,\n\t\turl as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> HospitalAdmissiinsSource\nsource(output(\n\t\tcountry as string,\n\t\tcountry_code_2_digit as string,\n\t\tcountry_code_3_digit as string,\n\t\tcontinent as string,\n\t\tpopulation as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> countrySource\nsource(output(\n\t\tdate_key as string,\n\t\tdate as string,\n\t\tyear as string,\n\t\tmonth as string,\n\t\tday as string,\n\t\tday_name as string,\n\t\tday_of_year as string,\n\t\tweek_of_month as string,\n\t\tweek_of_year as string,\n\t\tmonth_name as string,\n\t\tyear_month as string,\n\t\tyear_week as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> DimDataSource\nHospitalAdmissiinsSource select(mapColumn(\n\t\tcountry,\n\t\tindicator,\n\t\treported_date = date,\n\t\treported_year_week = year_week,\n\t\tvalue,\n\t\tsource\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectReqdFields\nSelectReqdFields, countrySource lookup(SelectReqdFields@country == countrySource@country,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupCountry\nLookupCountry select(mapColumn(\n\t\tcountry = SelectReqdFields@country,\n\t\tindicator,\n\t\treported_date,\n\t\treported_year_week,\n\t\tvalue,\n\t\tsource,\n\t\tcountry = countrySource@country,\n\t\tcountry_code_2_digit,\n\t\tcountry_code_3_digit,\n\t\tpopulation\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRequiredFields\nSelectRequiredFields split(indicator == 'Weekly new hospital admissions per 100k' || indicator == 'Weekly new ICU admissions per 100k',\n\tdisjoint: false) ~> SplitDailyFromweekly@(Weekly, Daily)\nDimDataSource derive(ecdc_year_week = year + '-W' + lpad(week_of_year,2,'0')) ~> DeriveECDCYearWeek\nDeriveECDCYearWeek aggregate(groupBy(ecdc_year_week),\n\tweek_start_date = min(date),\n\t\tweek_end_date = max(date)) ~> AggDimDate\nSplitDailyFromweekly@Weekly, AggDimDate join(reported_year_week == ecdc_year_week,\n\tjoinType:'inner',\n\tbroadcast: 'auto')~> JoinWithDate\nJoinWithDate pivot(groupBy(country,\n\t\tcountry_code_2_digit,\n\t\tcountry_code_3_digit,\n\t\tpopulation,\n\t\treported_year_week,\n\t\tweek_start_date,\n\t\tweek_end_date,\n\t\tsource),\n\tpivotBy(indicator, ['Weekly new hospital admissions per 100k', 'Weekly new ICU admissions per 100k']),\n\tcount = sum(value),\n\tcolumnNaming: '$V_$N',\n\tlateral: true) ~> PivotWeekly\nSplitDailyFromweekly@Daily pivot(groupBy(country,\n\t\tcountry_code_2_digit,\n\t\tcountry_code_3_digit,\n\t\tpopulation,\n\t\treported_date,\n\t\tsource),\n\tpivotBy(indicator, ['Daily hospital occupancy', 'Daily ICU occupancy']),\n\tcount = sum(value),\n\tcolumnNaming: '$V_$N',\n\tlateral: true) ~> PivotDaily\nPivotWeekly sort(desc(reported_year_week, true),\n\tasc(country, true)) ~> SortWeekly\nPivotDaily sort(asc(reported_date, true),\n\tasc(country, true)) ~> SortDaily\nSortWeekly select(mapColumn(\n\t\tcountry,\n\t\tcountry_code_2_digit,\n\t\tcountry_code_3_digit,\n\t\tpopulation,\n\t\treported_year_week,\n\t\treported_week_start_date = week_start_date,\n\t\treported_week_end_date = week_end_date,\n\t\tnew_hospital_occupancycount = {Weekly new hospital admissions per 100k_count},\n\t\tnew_ICU_occupancycount = {Weekly new ICU admissions per 100k_count},\n\t\tsource\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectWeekly\nSortDaily select(mapColumn(\n\t\tcountry,\n\t\tcountry_code_2_digit,\n\t\tcountry_code_3_digit,\n\t\tpopulation,\n\t\treported_date,\n\t\t{hospital occupancy_count} = {Daily hospital occupancy_count},\n\t\t{ICU occupancy_count} = {Daily ICU occupancy_count},\n\t\tsource\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDaily\nSelectWeekly sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\ttruncate: true,\n\tumask: 0022,\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> weeklySink\nSelectDaily sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\ttruncate: true,\n\tumask: 0022,\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> dailySink"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/ds_raw_hospital_admission')]",
-				"[concat(variables('factoryId'), '/datasets/ds_LookupCountryCode')]",
-				"[concat(variables('factoryId'), '/datasets/ds_Dim_dateLookup')]",
-				"[concat(variables('factoryId'), '/datasets/ds_processed_hospital_Admissions_weekly')]",
-				"[concat(variables('factoryId'), '/datasets/ds_processed_hospital_Admissions_daily')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/pl_HospitalAdmissions')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "processed_Hospital Admissions",
-						"type": "ExecuteDataFlow",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "1.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"dataflow": {
-								"referenceName": "df_transforms_hospital_Admissions",
-								"type": "DataFlowReference",
-								"parameters": {},
-								"datasetParameters": {
-									"HospitalAdmissiinsSource": {},
-									"countrySource": {},
-									"DimDataSource": {},
-									"weeklySink": {},
-									"dailySink": {}
-								}
-							},
-							"staging": {},
-							"compute": {
-								"coreCount": 8,
-								"computeType": "General"
-							},
-							"traceLevel": "Coarse"
-						}
-					}
-				],
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/dataflows/df_transforms_hospital_Admissions')]"
 			]
 		}
 	]
