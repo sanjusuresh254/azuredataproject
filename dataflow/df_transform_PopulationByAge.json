@@ -1,0 +1,58 @@
+{
+	"name": "df_transform_PopulationByAge",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ds_population_raw_tsv",
+						"type": "DatasetReference"
+					},
+					"name": "SourcePopulation"
+				},
+				{
+					"dataset": {
+						"referenceName": "ds_LookupCountryCode",
+						"type": "DatasetReference"
+					},
+					"name": "Lookupcountry"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "ds_populationsink",
+						"type": "DatasetReference"
+					},
+					"name": "sinkPopulation"
+				}
+			],
+			"transformations": [
+				{
+					"name": "SelectReqd"
+				},
+				{
+					"name": "SplitColumn"
+				},
+				{
+					"name": "SelectReq"
+				},
+				{
+					"name": "Pivot1"
+				},
+				{
+					"name": "MapDrifted",
+					"description": "Creates an explicit mapping for each drifted column"
+				},
+				{
+					"name": "LookupCountrycode"
+				},
+				{
+					"name": "SelectRqd"
+				}
+			],
+			"script": "source(output(\n\t\t{indic_de,geo\\time} as string,\n\t\t{2008 } as string,\n\t\t{2009 } as string,\n\t\t{2010 } as string,\n\t\t{2011 } as string,\n\t\t{2012 } as string,\n\t\t{2013 } as string,\n\t\t{2014 } as string,\n\t\t{2015 } as string,\n\t\t{2016 } as string,\n\t\t{2017 } as string,\n\t\t{2018 } as string,\n\t\t{2019 } as double\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> SourcePopulation\nsource(output(\n\t\tcountry as string,\n\t\tcountry_code_2_digit as string,\n\t\tcountry_code_3_digit as string,\n\t\tcontinent as string,\n\t\tpopulation as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> Lookupcountry\nSourcePopulation select(mapColumn(\n\t\t{indic_de,geo\\time},\n\t\t{2019 }\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectReqd\nSelectReqd derive(AgeGroup = split({indic_de,geo\\time},',')[1],\n\t\tCountryCode = split({indic_de,geo\\time},',')[2]) ~> SplitColumn\nSplitColumn select(mapColumn(\n\t\tCountryCode,\n\t\tAgeGroup,\n\t\tDataFor2019 = {2019 }\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectReq\nSelectReq pivot(groupBy(CountryCode),\n\tpivotBy(AgeGroup),\n\tpercentage = sum(DataFor2019),\n\tcolumnNaming: '$V_$N',\n\tlateral: true) ~> Pivot1\nPivot1 derive(PC_Y0_14_Percentage = toDouble(byName('PC_Y0_14_Percentage')),\n\t\tPC_Y15_24_Percentage = toDouble(byName('PC_Y15_24_Percentage')),\n\t\tPC_Y25_49_Percentage = toDouble(byName('PC_Y25_49_Percentage')),\n\t\tPC_Y50_64_Percentage = toDouble(byName('PC_Y50_64_Percentage')),\n\t\tPC_Y65_79_Percentage = toDouble(byName('PC_Y65_79_Percentage')),\n\t\tPC_Y80_MAX_Percentage = toDouble(byName('PC_Y80_MAX_Percentage'))) ~> MapDrifted\nMapDrifted, Lookupcountry lookup(CountryCode == country_code_2_digit,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupCountrycode\nLookupCountrycode select(mapColumn(\n\t\tcountry,\n\t\tcountry_code_2_digit,\n\t\tcountry_code_3_digit,\n\t\tpopulation,\n\t\tPC_Y0_14_Percentage,\n\t\tPC_Y15_24_Percentage,\n\t\tPC_Y25_49_Percentage,\n\t\tPC_Y50_64_Percentage,\n\t\tPC_Y65_79_Percentage,\n\t\tPC_Y80_MAX_Percentage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRqd\nSelectRqd sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tumask: 0022,\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sinkPopulation"
+		}
+	}
+}
